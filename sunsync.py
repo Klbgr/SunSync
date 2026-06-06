@@ -1,7 +1,13 @@
 import os
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from importlib.metadata import PackageNotFoundError, version
 from typing import Tuple
+
+try:
+    __version__ = version("sunsync")
+except PackageNotFoundError:  # running from a source checkout, not installed
+    __version__ = "0.1.0"
 
 from config.constants import DEFAULT_IMAGE, SOURCE_COLORS, RESET_COLOR
 from sunshine.sunshine import (
@@ -50,6 +56,11 @@ def parse_args(argv=None):
 
     parser = argparse.ArgumentParser(
         description="Import launcher games into Sunshine.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"sunsync {__version__}",
     )
     parser.add_argument(
         "--gui",

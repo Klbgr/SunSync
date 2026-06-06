@@ -49,30 +49,45 @@ def get_lutris_cover(game_id: str) -> Optional[str]:
     return None
 
 
-def get_steam_cover(game_id: str) -> Optional[str]:
-    """Return absolute path to Steam local cover art, or None."""
-    steam_root = os.path.expanduser("~/.local/share/Steam")
+_STEAM_ROOTS = [
+    "~/.local/share/Steam",
+    "~/.steam/steam",
+    "~/.var/app/com.valvesoftware.Steam/.steam/steam",
+    "~/.var/app/com.valvesoftware.Steam/data/Steam",
+]
 
-    userdata = os.path.join(steam_root, "userdata")
-    if os.path.isdir(userdata):
-        for user_dir in os.listdir(userdata):
-            grid = os.path.join(userdata, user_dir, "config", "grid")
-            if not os.path.isdir(grid):
-                continue
-            for ext in _IMAGE_EXTS:
-                for name in (f"{game_id}p.{ext}", f"{game_id}.{ext}"):
-                    path = os.path.join(grid, name)
+
+def get_steam_cover(game_id: str) -> Optional[str]:
+    """Return absolute path to Steam local cover art, or None.
+
+    Checks both native and Flatpak Steam roots, since the install type the
+    cover lives under may differ from the one detected for launching.
+    """
+    for root in _STEAM_ROOTS:
+        steam_root = os.path.expanduser(root)
+        if not os.path.isdir(steam_root):
+            continue
+
+        userdata = os.path.join(steam_root, "userdata")
+        if os.path.isdir(userdata):
+            for user_dir in os.listdir(userdata):
+                grid = os.path.join(userdata, user_dir, "config", "grid")
+                if not os.path.isdir(grid):
+                    continue
+                for ext in _IMAGE_EXTS:
+                    for name in (f"{game_id}p.{ext}", f"{game_id}.{ext}"):
+                        path = os.path.join(grid, name)
+                        if os.path.exists(path):
+                            return path
+
+        cache = os.path.join(steam_root, "appcache", "librarycache")
+        if os.path.isdir(cache):
+            for suffix in ("library_600x900", "library_hero", ""):
+                for ext in _IMAGE_EXTS:
+                    name = f"{game_id}_{suffix}.{ext}" if suffix else f"{game_id}.{ext}"
+                    path = os.path.join(cache, name)
                     if os.path.exists(path):
                         return path
-
-    cache = os.path.join(steam_root, "appcache", "librarycache")
-    if os.path.isdir(cache):
-        for suffix in ("library_600x900", "library_hero", ""):
-            for ext in _IMAGE_EXTS:
-                name = f"{game_id}_{suffix}.{ext}" if suffix else f"{game_id}.{ext}"
-                path = os.path.join(cache, name)
-                if os.path.exists(path):
-                    return path
 
     return None
 

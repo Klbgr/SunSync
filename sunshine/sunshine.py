@@ -7,10 +7,9 @@ import urllib3
 import subprocess
 import glob
 import shlex
-from typing import Tuple, Optional, Dict, List
+from typing import Any, Tuple, Optional, Dict, List
 from requests.utils import dict_from_cookiejar, cookiejar_from_dict
 from config.constants import (
-    DEFAULT_IMAGE,
     DEFAULT_SUNSHINE_HOST,
     DEFAULT_SUNSHINE_PORT,
 )
@@ -27,6 +26,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 INSTALLATION_TYPE = None
 SERVER_NAME = "sunshine"
+API_REQUEST_TIMEOUT = 10
 AUTH_SESSION: Optional[requests.Session] = None
 AUTH_TOKEN: Optional[str] = None
 API_HOST_OVERRIDE: Optional[str] = None
@@ -48,7 +48,7 @@ def _normalize_api_host(host: Optional[str]) -> str:
     return normalized or DEFAULT_SUNSHINE_HOST
 
 
-def _normalize_api_port(port: Optional[object]) -> int:
+def _normalize_api_port(port: Any) -> int:
     try:
         normalized = int(port)
     except (TypeError, ValueError):
@@ -62,7 +62,7 @@ def _api_connection_file_path() -> str:
     return os.path.join(_get_config_root(), "server_connection.json")
 
 
-def _load_api_connection_settings() -> Dict[str, Dict[str, object]]:
+def _load_api_connection_settings() -> Dict[str, Dict[str, Any]]:
     path = _api_connection_file_path()
     if not os.path.exists(path):
         return {}
@@ -74,7 +74,7 @@ def _load_api_connection_settings() -> Dict[str, Dict[str, object]]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _save_api_connection_settings(settings: Dict[str, Dict[str, object]]) -> None:
+def _save_api_connection_settings(settings: Dict[str, Dict[str, Any]]) -> None:
     os.makedirs(_get_config_root(), exist_ok=True)
     with open(_api_connection_file_path(), "w") as file:
         json.dump(settings, file, indent=2)
@@ -308,8 +308,23 @@ def is_server_running(name: Optional[str] = None) -> bool:
     return name in running
 
 
+_EXISTING_APPS_CACHE: Optional[List[Dict]] = None
+
+
+def prime_existing_apps_cache() -> None:
+    """Fetch the existing-apps list once so a batch add avoids one GET per game."""
+    global _EXISTING_APPS_CACHE
+    _EXISTING_APPS_CACHE = get_existing_apps()
+
+
+def clear_existing_apps_cache() -> None:
+    global _EXISTING_APPS_CACHE
+    _EXISTING_APPS_CACHE = None
+
+
 def _find_existing_app(game_name: str) -> Optional[Dict]:
-    for app in get_existing_apps():
+    apps = _EXISTING_APPS_CACHE if _EXISTING_APPS_CACHE is not None else get_existing_apps()
+    for app in apps:
         if app["name"] == game_name:
             return app
     return None
@@ -470,7 +485,7 @@ def _cookie_login(username: str, password: str) -> Optional[requests.Session]:
         url = f"{get_api_url()}{endpoint}"
         for kwargs in ({"json": credentials}, {"data": credentials}):
             try:
-                session.post(url, verify=False, timeout=10, **kwargs)
+                session.post(url, verify=False, timeout=10, **kwargs)  # type: ignore[arg-type]
             except requests.exceptions.RequestException:
                 continue
             if _validate_session(session):
@@ -512,10 +527,10 @@ def get_auth_session(allow_prompt: bool = True) -> Optional[requests.Session]:
     if not username or not password:
         return None
 
-    session = _attempt_login(username, password)
-    if session is not None:
-        AUTH_SESSION = session
-        return session
+    login_session = _attempt_login(username, password)
+    if login_session is not None:
+        AUTH_SESSION = login_session
+        return login_session
 
     print("Error: Authentication failed. Could not obtain a valid session.")
     return None
@@ -624,10 +639,15 @@ def build_game_command(game_id: str, runner) -> Optional[str]:
         if not retroarch_cmd or not core_path:
             return None
         return f"{retroarch_cmd} -L {shlex.quote(core_path)} {shlex.quote(game_id)}"
-    return (
-        "flatpak run --command=bottles-cli com.usebottles.bottles run "
-        f"-b {shlex.quote(str(runner))} -p {shlex.quote(game_id)}"
-    )
+    if isinstance(runner, dict) and runner.get("type") == "Bottles":
+        bottle = runner.get("bottle", "")
+        if not bottle:
+            return None
+        return (
+            "flatpak run --command=bottles-cli com.usebottles.bottles run "
+            f"-b {shlex.quote(str(bottle))} -p {shlex.quote(game_id)}"
+        )
+    return None
 
 
 def add_game_to_sunshine(game_id: str, game_name: str, image_path: str, runner) -> None:
@@ -721,6 +741,7 @@ def sunshine_api_request(method, endpoint, **kwargs):
     session = kwargs.pop("session", None) or AUTH_SESSION
     token = kwargs.pop("token", None) or AUTH_TOKEN
     headers = kwargs.pop("headers", {})
+    kwargs.setdefault("timeout", API_REQUEST_TIMEOUT)
 
     if session is None:
         session = get_auth_session(allow_prompt=False)

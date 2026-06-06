@@ -2,9 +2,9 @@ import os
 import subprocess
 import sys
 import json
-from typing import Any, List
+from typing import Any, List, NoReturn
 
-def handle_interrupt():
+def handle_interrupt() -> NoReturn:
     print("\nScript interrupted by user. Exiting...")
     sys.exit(0)
 

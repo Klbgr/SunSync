@@ -144,10 +144,14 @@ def list_faugus_games() -> List[Tuple[str, str, str, Dict[str, object]]]:
         path = entry.get("path")
         prefix = entry.get("prefix")
 
-        if not all(
-            isinstance(value, str) and value.strip()
-            for value in (game_id, title, path, prefix)
+        if not (
+            isinstance(game_id, str)
+            and isinstance(title, str)
+            and isinstance(path, str)
+            and isinstance(prefix, str)
         ):
+            continue
+        if not (game_id.strip() and title.strip() and path.strip() and prefix.strip()):
             continue
 
         runner = {

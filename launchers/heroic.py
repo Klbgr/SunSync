@@ -27,7 +27,7 @@ def get_heroic_command() -> Tuple[Optional[str], Optional[str]]:
         return None, None
 
 def list_heroic_games() -> List[Tuple[str, str, str, str]]:
-    games = []
+    games: List[Tuple[str, str, str, str]] = []
     heroic_cmd, installation_type = get_heroic_command()
 
     if not heroic_cmd or not installation_type:

@@ -59,7 +59,7 @@ def get_user_selection(games: List[Tuple[str, str]]) -> List[int]:
         if value.strip() == str(len(games) + 1):
             return list(range(len(games)))
 
-        indices = []
+        indices: List[int] = []
         for part in value.split(','):
             part = part.strip()
             if '-' in part:

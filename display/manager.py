@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 CONFIG_ROOT = Path("~/.config/sunsync").expanduser()
 DISPLAY_ROOT = CONFIG_ROOT / "display"

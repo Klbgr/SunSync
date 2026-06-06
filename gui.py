@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QTabWidget, QFrame,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, pyqtSlot, QSize
-from PyQt6.QtGui import QColor, QPixmap, QIcon, QPalette
+from PyQt6.QtGui import QPixmap, QIcon, QPalette
 
 
 def _bundled_scripts_dir() -> Path:
@@ -215,13 +215,18 @@ class AddGamesWorker(QObject):
 
     @pyqtSlot()
     def run(self):
-        from sunshine.sunshine import add_game_to_sunshine
+        from sunshine.sunshine import (
+            add_game_to_sunshine,
+            prime_existing_apps_cache,
+            clear_existing_apps_cache,
+        )
         from config.constants import DEFAULT_IMAGE
         from display.manager import get_prefer_steamgriddb
         from utils.images import get_local_cover, prepare_sunshine_cover
         prefer_steamgriddb = get_prefer_steamgriddb()
         added = 0
         total = len(self.games)
+        prime_existing_apps_cache()
 
         for game_id, game_name, display_source, runner in self.games:
             if display_source == "RetroArch":
@@ -258,6 +263,7 @@ class AddGamesWorker(QObject):
             except Exception as exc:
                 self.error.emit(f"Error adding '{game_name}': {exc}")
 
+        clear_existing_apps_cache()
         self.finished.emit(added, total)
 
 
@@ -1098,7 +1104,7 @@ class MainWindow(QMainWindow):
             if already:
                 item.setText(f"{game_name}  ✓")
                 item.setForeground(
-                    QApplication.instance().palette().color(QPalette.ColorRole.PlaceholderText)
+                    QApplication.palette().color(QPalette.ColorRole.PlaceholderText)
                 )
                 item.setToolTip(
                     f"{game_name} is already in Sunshine. Check it to update the cover and launch command."
@@ -1112,6 +1118,8 @@ class MainWindow(QMainWindow):
         q = query.lower()
         for i in range(self.game_list.count()):
             item = self.game_list.item(i)
+            if item is None:
+                continue
             data = item.data(Qt.ItemDataRole.UserRole)
             name = data[1].lower() if data else ""
             item.setHidden(bool(q) and q not in name)
@@ -1119,18 +1127,21 @@ class MainWindow(QMainWindow):
     def _select_all(self):
         for i in range(self.game_list.count()):
             item = self.game_list.item(i)
-            if not item.isHidden():
+            if item is not None and not item.isHidden():
                 item.setCheckState(Qt.CheckState.Checked)
 
     def _deselect_all(self):
         for i in range(self.game_list.count()):
-            self.game_list.item(i).setCheckState(Qt.CheckState.Unchecked)
+            item = self.game_list.item(i)
+            if item is not None:
+                item.setCheckState(Qt.CheckState.Unchecked)
 
     def _get_checked_games(self) -> List[Tuple]:
         return [
             item.data(Qt.ItemDataRole.UserRole)
             for i in range(self.game_list.count())
-            if (item := self.game_list.item(i)).checkState() == Qt.CheckState.Checked
+            if (item := self.game_list.item(i)) is not None
+            and item.checkState() == Qt.CheckState.Checked
             and item.data(Qt.ItemDataRole.UserRole)
         ]
 

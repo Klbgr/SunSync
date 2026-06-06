@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -6,7 +5,6 @@ from typing import Tuple
 
 from config.constants import DEFAULT_IMAGE, SOURCE_COLORS, RESET_COLOR
 from sunshine.sunshine import (
-    authenticate_with_credentials,
     detect_apollo_installation,
     detect_sunshine_installation,
     ensure_authenticated,
@@ -18,6 +16,8 @@ from sunshine.sunshine import (
     get_server_display_name,
     is_server_running,
     add_game_to_sunshine,
+    prime_existing_apps_cache,
+    clear_existing_apps_cache,
     save_api_connection,
     set_api_connection,
     set_installation_type,
@@ -25,9 +25,8 @@ from sunshine.sunshine import (
 )
 from utils.utils import handle_interrupt
 from utils.input import get_user_input, get_yes_no_input, get_user_selection
-from utils.terminal import accent, badge, heading, muted, state_text
 from utils.steamgriddb import manage_api_key, download_image_from_steamgriddb
-from launchers.heroic import list_heroic_games, get_heroic_command, HEROIC_PATHS
+from launchers.heroic import list_heroic_games, get_heroic_command
 from launchers.lutris import list_lutris_games, get_lutris_command, is_lutris_running
 from launchers.bottles import detect_bottles_installation, list_bottles_games
 from launchers.steam import detect_steam_installation, list_steam_games, get_steam_command
@@ -38,7 +37,6 @@ from launchers.eden import detect_eden_installation, list_eden_games
 from display.manager import (
     clear_external_prep_scripts,
     get_external_prep_commands,
-    has_external_prep_scripts,
     set_external_prep_scripts,
 )
 
@@ -385,6 +383,7 @@ def main(argv=None):
         prefer_steamgriddb = get_prefer_steamgriddb()
 
         games_added = False
+        prime_existing_apps_cache()
         with ThreadPoolExecutor() as executor:
             futures = {}
             for game_id, game_name, display_source, source in valid_selected_games:
@@ -419,6 +418,7 @@ def main(argv=None):
                 add_game_to_sunshine(game_id, game_name, image_path, source)
                 games_added = True
 
+        clear_existing_apps_cache()
         if games_added:
             print(f"Games added to {get_server_display_name()} successfully.")
         else:
